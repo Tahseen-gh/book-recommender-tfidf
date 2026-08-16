@@ -1,9 +1,13 @@
 """Load the books CSV and clean its text fields for vectorization.
 
-This is a direct port of the preprocessing cell from the original notebook
+This is a port of the preprocessing cell from the original notebook
 (IDriven_Book_Shopping_Recommendation_Engine.ipynb) - same regex, same
-stopword filtering, same column combination. Only the NLTK download has
-been made conditional so it doesn't hit the network on every run.
+stopword filtering, same column combination. Two things were changed from
+a straight port: the NLTK download is conditional instead of hitting the
+network on every run, and the stopword list is loaded once at import time
+instead of being re-fetched on every word during filtering. Both are
+startup-time fixes only - the set of words treated as stopwords, and so
+the cleaned output, is unchanged.
 """
 
 import re
@@ -29,13 +33,18 @@ def ensure_nltk_stopwords():
 
 ensure_nltk_stopwords()
 
+ENGLISH_STOPWORDS = frozenset(stopwords.words('english'))
+
 
 def clean_text(text):
     """Strip non-letters, lowercase, and drop English stopwords.
 
-    Note: this re-fetches stopwords.words('english') on every word during
-    filtering rather than loading it once - a pre-existing inefficiency
-    carried over unchanged from the original notebook.
+    The stopword set is loaded once at import time (ENGLISH_STOPWORDS)
+    rather than re-fetched from NLTK on every word, which is what the
+    original notebook did. That re-fetch was the dominant cost of loading
+    a real-sized (~11,000 row) dataset - see README.md for measured
+    before/after startup numbers. The set of words filtered, and so the
+    output for any given input, is identical either way.
 
     Non-string input (e.g. NaN from a missing CSV field) returns ''.
     """
@@ -43,7 +52,7 @@ def clean_text(text):
         text = re.sub('[^a-zA-Z]', ' ', text)
         text = text.lower()
         words = text.split()
-        words = [w for w in words if not w in stopwords.words('english')]
+        words = [w for w in words if w not in ENGLISH_STOPWORDS]
         return ' '.join(words)
     else:
         return ''

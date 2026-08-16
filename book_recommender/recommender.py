@@ -1,17 +1,22 @@
 """TF-IDF vectorization and cosine-similarity scoring.
 
-Direct port of the vectorization/recommendation cell from the original
-notebook. Two separate TF-IDF spaces are built:
+Vectorization is a direct port of the original notebook: two TF-IDF
+spaces are built at fit time.
 
 - tfidf_combined: title + authors + publisher + language_code, capped at
-  5000 features. Used to compute cosine_sim_combined at fit time.
-- tfidf_title: title text only, unbounded vocabulary. Used to score
-  incoming queries in get_recommendations.
+  5000 features. cosine_sim_combined is its full book-to-book similarity
+  matrix.
+- tfidf_title: title text only, unbounded vocabulary. Used to match a
+  free-text query against the corpus, since a typed query can't be looked
+  up in a book-to-book matrix directly.
 
-The combined-text space is fit and its full pairwise similarity matrix is
-computed, but get_recommendations does not read from it - see the
-'cosine_sim' parameter below and the project README for details. That
-behavior is unchanged from the original notebook.
+get_recommendations uses both: title similarity finds the single closest
+book to the typed query (partial title matching), then cosine_sim_combined
+ranks every book against that match. That's what makes recommendations
+reflect shared author/publisher/language, not just title text - see the
+project README for the reasoning. In the original notebook, scoring was
+title-only and cosine_sim_combined was computed but never read; this is
+the fixed version.
 """
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -44,13 +49,21 @@ class BookRecommender:
         )
 
     def get_recommendations(self, query, cosine_sim=None):
-        """Return the top 10 books whose titles are closest to `query`.
+        """Return the top 10 books most similar to `query`'s closest title match.
 
-        `cosine_sim` mirrors the original notebook's function signature,
-        which defaulted to the precomputed combined-text similarity matrix.
-        It's accepted here for the same interface parity but - as in the
-        source notebook - is never read inside this method; scoring is
-        done entirely via a fresh query-vs-title-corpus similarity below.
+        Two steps: find the single book whose title is closest to `query`
+        (partial title matching via the title-only vectorizer), then rank
+        every book against that book using `cosine_sim` - the combined
+        title+author+publisher+language_code similarity matrix. Defaults to
+        `self.cosine_sim_combined`; accepting it as a parameter mirrors the
+        original notebook's function signature.
+
+        A query with no meaningful title overlap still anchors on whatever
+        book scores highest (there's no similarity floor), so it still
+        returns 10 books - just not meaningful ones. Same for a query that
+        exactly matches a book already in the corpus: that book will
+        anchor on itself and typically rank first in its own results,
+        since a book is maximally similar to itself.
 
         Returns a DataFrame with columns: title, authors, average_rating.
         """
@@ -60,7 +73,9 @@ class BookRecommender:
         query_cleaned = clean_text(query)
         query_vector = self.tfidf_title.transform([query_cleaned])
         title_similarities = cosine_similarity(query_vector, self.tfidf_title_matrix).flatten()
+        best_match_index = title_similarities.argmax()
 
-        similar_indices = title_similarities.argsort()[-10:][::-1]
+        combined_similarities = cosine_sim[best_match_index]
+        similar_indices = combined_similarities.argsort()[-10:][::-1]
         recommended_books = self.df.iloc[similar_indices][['title', 'authors', 'average_rating']]
         return recommended_books
