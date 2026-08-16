@@ -15,10 +15,15 @@ from .recommender import BookRecommender
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "books.csv"
 
 
-def build_interface(csv_path=DATA_PATH):
-    """Load the dataset, fit the recommender, and return a gr.Interface."""
+def build_interface(csv_path=DATA_PATH, backend='tfidf'):
+    """Load the dataset, fit the recommender for `backend`, and return a gr.Interface."""
     df = load_books(csv_path)
-    recommender = BookRecommender(df)
+
+    if backend == 'embeddings':
+        from .embeddings import EmbeddingRecommender
+        recommender = EmbeddingRecommender(df, csv_path)
+    else:
+        recommender = BookRecommender(df)
 
     def recommend_books(query):
         recommendations = recommender.get_recommendations(query)
@@ -32,13 +37,13 @@ def build_interface(csv_path=DATA_PATH):
         inputs=gr.Textbox(lines=1, placeholder='Enter a book title'),
         outputs='html',
         title='Book Recommendation Search Engine',
-        description='Enter a book title to get similar book recommendations.',
+        description=f'Enter a book title to get similar book recommendations. Backend: {backend}.',
     )
 
 
-def main():
+def main(backend='tfidf'):
     try:
-        iface = build_interface()
+        iface = build_interface(backend=backend)
     except FileNotFoundError:
         raise SystemExit(
             f"Couldn't find {DATA_PATH}.\n"
