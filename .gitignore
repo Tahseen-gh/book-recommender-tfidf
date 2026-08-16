@@ -2,6 +2,9 @@
 data/*
 !data/README.md
 
+# Cached embeddings - regenerated on first run of the embeddings backend
+.cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
